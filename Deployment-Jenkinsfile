@@ -1,7 +1,7 @@
 pipeline { //Start of declarative pipeline 
 	agent any // Node on which pipeline should be executed
 	parameters { // Parameters to be used in the pipeline
-        choice(name: 'gitBranch', choices:"master", description: 'profile Name for build Maven Project')
+        choice(name: 'gitBranch', choices:"main", description: 'profile Name for build Maven Project')
         choice(name: 'gitCredentialsId', choices: 'edc6f036-6b26-4b5b-be25-bb53fae00917', description: 'others')
         choice(name: 'gitProjectRepo', choices: "https://github.com/pavireddi/specsavers.git", description: "")
         choice(name: 'dockerrepo', choices: "661413504645.dkr.ecr.us-east-2.amazonaws.com/specsavers", description: "Docker repo URL")
@@ -55,7 +55,7 @@ pipeline { //Start of declarative pipeline
 					}
            		 }
 		}
-		stage('Start containers') { //Sonarqube static code analysis
+		stage('Start containers') {
 		    steps {
                 script {
 			sh "sed -i \"s;latest;${BUILD_NUMBER};g\" playbook.yml"
