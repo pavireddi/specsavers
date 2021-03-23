@@ -1,0 +1,67 @@
+pipeline { //Start of declarative pipeline 
+	agent any // Node on which pipeline should be executed
+	parameters { // Parameters to be used in the pipeline
+        choice(name: 'gitBranch', choices:"master", description: 'profile Name for build Maven Project')
+        choice(name: 'gitCredentialsId', choices: 'edc6f036-6b26-4b5b-be25-bb53fae00917', description: 'others')
+        choice(name: 'gitProjectRepo', choices: "https://github.com/pavireddi/specsavers.git", description: "")
+        choice(name: 'dockerrepo', choices: "661413504645.dkr.ecr.us-east-2.amazonaws.com/specsavers", description: "Docker repo URL")
+    }
+	stages { //block of operations to be performed under pipeline
+	    stage ('Clean Workspace') { //Clean the workspace directory before other steps
+          steps {
+            deleteDir() //Method provided by Pipeline : Basic Steps plugin
+          }
+        }
+		stage ("Git clone code repo"){ //Clone git repository.
+				steps {
+					script {
+						 git branch: "${params.gitBranch}", credentialsId: "${params.gitCredentialsId}", url: "${params.gitProjectRepo}"
+							sh "git checkout"	//Checkout git code
+					}
+				}
+			}
+		stage ("Maven Build") { //Maven build source code
+			steps {
+                script {
+                    def mvn_version = 'maven' //Define the name of the maven configured in global tool configuration of Jenkins
+					withEnv( ["PATH+MAVEN=${tool mvn_version}/bin"] ) {
+						sh 'mvn clean install' // -DskipTests=true -B' //Maven build
+					}
+                }
+			}
+		}
+		stage('SonarQube Analysis') { //Sonarqube static code analysis
+		    steps {
+                script {
+                    withSonarQubeEnv('sonar') { //SonarQube is the name configured in Jenkins Global tool configuration
+                    sh "/var/lib/jenkins/apache-maven-3.6.3/bin/mvn sonar:sonar" //Execute sonar scan
+                    }
+                }
+		    }
+        }
+		stage ("Build and push docker image") { //Push docker image to ECR repository
+			steps {
+				dir("discovery-service"){
+				script {
+					withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: "b0e84815-8a25-4d76-a7c9-80bfdcb3d746", secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+							def awsLogin  = sh(script: "aws ecr get-login --region us-east-2 --no-include-email", returnStdout: true)
+                                                        sh "${awsLogin}"
+							sh 'docker build -t specsavers .'
+							sh "docker tag specsavers:latest ${params.dockerrepo}:${BUILD_NUMBER}"
+							sh "docker push ${params.dockerrepo}:${BUILD_NUMBER}"
+					}
+                   			 sh "docker rmi ${params.dockerrepo}:${BUILD_NUMBER}" //Remove the local docker image
+               			 }
+					}
+           		 }
+		}
+		stage('Start containers') { //Sonarqube static code analysis
+		    steps {
+                script {
+			sh "sed -i \"s;latest;${BUILD_NUMBER};g\" playbook.yml"
+                    sh "ansible-playbook  playbook.yml"
+                    }
+		    }
+        }
+	}
+}

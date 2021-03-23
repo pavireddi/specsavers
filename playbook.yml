@@ -1,0 +1,14 @@
+---
+- hosts: localhost
+  gather_facts: no
+  remote_user: jenkins
+  become: no
+  tasks:
+    - name: Start docker container
+      docker_container:
+        name: eureka
+        image: 661413504645.dkr.ecr.us-east-2.amazonaws.com/specsavers:latest
+        state: started
+        recreate: yes
+        ports:
+          - 8761:8761
